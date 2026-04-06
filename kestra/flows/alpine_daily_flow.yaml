@@ -1,0 +1,18 @@
+id: alpine_hourly_sync
+namespace: dev.alpine
+description: |
+  Hourly DBT execution to refresh Silver layer and Portfolio Views.
+
+tasks:
+  - id: dbt_run
+    type: io.kestra.plugin.scripts.shell.Commands
+    runner: PROCESS
+    commands:
+      - make dbt-run
+    # In a real Kestra cluster, we'd use the dbt plugin. 
+    # For this local demo, we just trigger the make target from the host context.
+
+triggers:
+  - id: hourly_schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 * * * *"

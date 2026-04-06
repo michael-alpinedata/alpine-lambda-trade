@@ -1,13 +1,56 @@
-version: '3.8'
+version: "3"
+
+volumes:
+  postgres-data:
+  grafana-data:
 
 services:
-  localstack:
-    image: localstack/localstack:latest
-    ports:
-      - "127.0.0.1:4566:4566"
+  postgres:
+    image: postgres:15
     environment:
-      - SERVICES=s3,kinesis
-      - AWS_DEFAULT_REGION=eu-north-1
-      - DOCKER_HOST=unix:///var/run/docker.sock
+      POSTGRES_DB: kestra
+      POSTGRES_USER: kestra
+      POSTGRES_PASSWORD: kestra_password
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kestra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kestra:
+    image: kestra/kestra:latest
+    command: server standalone
+    environment:
+      KESTRA_CONFIGURATION: |
+        kestra:
+          repository:
+            type: postgres
+          queue:
+            type: postgres
+          storage:
+            type: local
+            local:
+              base-path: "/app/storage"
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: kestra_password
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
