@@ -30,7 +30,9 @@ def get_historical_data():
         PRICE,
         SOURCE_LAYER,
         SPIKE_DETECTED,
-        EMA
+        EMA,
+        UPPER_BAND,
+        LOWER_BAND
     FROM ALT_DB.STAGING_SERVING.VW_REALTIME_PORTFOLIO
     ORDER BY TRADE_TIMESTAMP DESC
     LIMIT 2000
@@ -85,36 +87,61 @@ st.divider()
 st.subheader("Price Movements & Volatility Anomalies")
 
 if not df.empty:
-    base = alt.Chart(df).encode(
-        x=alt.X('TRADE_TIMESTAMP:T', title='Heure (Locale)', axis=alt.Axis(format='%H:%M:%S', labelAngle=-45))
-    )
+    min_time = df['TRADE_TIMESTAMP'].min()
+    max_time = df['TRADE_TIMESTAMP'].max()
+    time_domain = [min_time, max_time]
 
-    price_line = base.mark_line(opacity=0.8).encode(
-        y=alt.Y('PRICE:Q', scale=alt.Scale(zero=False), title='Value ($)'),
-        color=alt.datum('Prix Actuel')
-    )
+    symbols = df['SYMBOL'].unique()
     
-    ema_line = base.mark_line(opacity=0.8, strokeDash=[5, 5]).encode(
-        y=alt.Y('EMA:Q'),
-        color=alt.datum('EMA Temps Réel')
-    )
+    for symbol in symbols:
+        symbol_df = df[df['SYMBOL'] == symbol]
+        
+        # 1. Base du graphique
+        base = alt.Chart(symbol_df).properties(
+            height=280,
+            width='container',
+            title=f"Market Trend: {symbol}"
+        ).encode(
+            x=alt.X('TRADE_TIMESTAMP:T', 
+                    title='Time', 
+                    axis=alt.Axis(format='%H:%M:%S'),
+                    scale=alt.Scale(domain=time_domain))
+        )
 
-    spikes = base.transform_filter(
-        alt.datum.SPIKE_DETECTED == True
-    ).mark_point(color='red', size=150, shape='diamond').encode(
-        y='PRICE:Q',
-        tooltip=['SYMBOL', 'PRICE', 'EMA', 'SOURCE_LAYER']
-    )
+        # 1. Bollinger Band Zone (Shaded Area)
+        bollinger_band = base.mark_area(opacity=0.1, color='gray').encode(
+            y=alt.Y('UPPER_BAND:Q'),
+            y2=alt.Y2('LOWER_BAND:Q')
+        )
 
-    combined = alt.layer(price_line, ema_line, spikes).properties(height=250)
-    faceted_chart = combined.facet(
-        row=alt.Row('SYMBOL:N', title=None),
-        spacing=20
-    ).resolve_scale(
-        y='independent'
-    )
+        # 2. Price Curve (Blue)
+        price_line = base.transform_calculate(
+            Type='datum.SYMBOL + " Price"'
+        ).mark_line(color='#1f77b4').encode(
+            y=alt.Y('PRICE:Q', scale=alt.Scale(zero=False), title='Price ($)'),
+            color=alt.Color('Type:N', scale=alt.Scale(range=['#1f77b4']), legend=alt.Legend(title=None))
+        )
+        
+        # 3. EMA Curve (Orange dashed)
+        ema_line = base.transform_calculate(
+            Type='datum.SYMBOL + " EMA (Speed Layer)"'
+        ).mark_line(strokeDash=[5, 5], color='#ff7f0e').encode(
+            y=alt.Y('EMA:Q'),
+            color=alt.Color('Type:N', scale=alt.Scale(range=['#ff7f0e']), legend=alt.Legend(title=None))
+        )
 
-    st.altair_chart(faceted_chart, use_container_width=True)
+        # 4. Anomaly Points (Spikes)
+        spikes = base.transform_filter(
+            alt.datum.SPIKE_DETECTED == True
+        ).mark_point(color='red', size=160, shape='diamond').encode(
+            y='PRICE:Q',
+            tooltip=['PRICE', 'EMA', 'UPPER_BAND', 'LOWER_BAND', 'SOURCE_LAYER']
+        )
+
+        # 5. Layer everything
+        combined = alt.layer(bollinger_band, ema_line, price_line, spikes).resolve_scale(color='independent')
+        
+        st.altair_chart(combined, use_container_width=True)
 
 st.subheader("Last 50 Ledger Transactions")
 # Style dataframe to highlight the source

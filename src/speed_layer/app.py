@@ -2,13 +2,16 @@ import os
 import json
 import base64
 import logging
+import numpy as np
+from collections import deque
+import logging
 import snowflake.connector
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Module-level cache for Warm invocations across batches
-# Memory layout: { 'BTC/USDT': { 'ema': 50000.0, 'alpha': 0.1 } }
+# Memory layout: { 'BTC/USDT': { 'ema': 50000.0, 'prices': deque([...]), 'alpha': 0.1 } }
 ema_cache = {}
 THRESHOLD = 0.02 # 2% anomaly spike variation allowed
 
@@ -45,29 +48,42 @@ def lambda_handler(event, context):
         trade_id = trade.get('id')
         dt = trade.get('datetime')
         
-        # EMA Core Mathematical Logic & Caching 
+        # EMA & Bollinger Core Mathematical Logic
         if symbol not in ema_cache:
-            ema_cache[symbol] = { 'ema': price, 'alpha': 0.1 }  # Initialize
+            ema_cache[symbol] = { 
+                'ema': price, 
+                'prices': deque([price], maxlen=20),
+                'alpha': 0.02 
+            }
         else:
             prev_ema = ema_cache[symbol]['ema']
             alpha = ema_cache[symbol]['alpha']
-            # EMA_today = (Value_today * a) + (EMA_yesterday * (1 - a))
+            # EMA Update
             new_ema = (price * alpha) + (prev_ema * (1 - alpha))
             ema_cache[symbol]['ema'] = new_ema
+            # Rolling Window for Bollinger
+            ema_cache[symbol]['prices'].append(price)
         
         current_ema = ema_cache[symbol]['ema']
+        
+        # Bollinger Bands Calculation
+        prices_window = list(ema_cache[symbol]['prices'])
+        std_dev = np.std(prices_window) if len(prices_window) > 1 else 0
+        upper_band = current_ema + (2 * std_dev)
+        lower_band = current_ema - (2 * std_dev)
+        
         spike_detected = abs(price - current_ema) / current_ema > THRESHOLD
 
         records_to_insert.append((
-            trade_id, symbol, price, current_ema, spike_detected, dt
+            trade_id, symbol, price, current_ema, upper_band, lower_band, spike_detected, dt
         ))
         
     if records_to_insert:
         try:
             cursor = sf_conn.cursor()
             query = """
-            INSERT INTO STG_REALTIME (TRADE_ID, SYMBOL, PRICE, EMA, SPIKE_DETECTED, TRADE_TIMESTAMP)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO STG_REALTIME (TRADE_ID, SYMBOL, PRICE, EMA, UPPER_BAND, LOWER_BAND, SPIKE_DETECTED, TRADE_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.executemany(query, records_to_insert)
             logger.info(f"Inserted {len(records_to_insert)} records into STG_REALTIME successfully.")

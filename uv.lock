@@ -148,6 +148,8 @@ batch = [
 ]
 producer = [
     { name = "ccxt" },
+    { name = "pandas" },
+    { name = "pyarrow" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
@@ -166,6 +168,8 @@ dev = [
     { name = "pytest-cov" },
 ]
 speed = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "snowflake-connector-python" },
 ]
 
@@ -176,7 +180,9 @@ requires-dist = [
     { name = "ccxt", marker = "extra == 'producer'", specifier = ">=4.2.0" },
     { name = "dbt-core", marker = "extra == 'batch'", specifier = ">=1.7.0" },
     { name = "dbt-snowflake", marker = "extra == 'batch'", specifier = ">=1.7.0" },
+    { name = "pandas", marker = "extra == 'producer'", specifier = ">=2.2.0" },
     { name = "pandas", marker = "extra == 'serving'", specifier = ">=2.2.0" },
+    { name = "pyarrow", marker = "extra == 'producer'", specifier = ">=15.0.0" },
     { name = "pydantic", marker = "extra == 'producer'", specifier = ">=2.6.0" },
     { name = "pydantic-settings", marker = "extra == 'producer'", specifier = ">=2.2.0" },
     { name = "snowflake-connector-python", extras = ["pandas"], marker = "extra == 'serving'", specifier = "==3.8.1" },
@@ -192,7 +198,10 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
     { name = "pytest-cov", specifier = ">=4.1.0" },
 ]
-speed = [{ name = "snowflake-connector-python", specifier = "==3.8.1" }]
+speed = [
+    { name = "numpy" },
+    { name = "snowflake-connector-python", specifier = "==3.8.1" },
+]
 
 [[package]]
 name = "altair"

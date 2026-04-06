@@ -54,11 +54,13 @@ local-infra-down:
 
 run-producer:
 	set -a && source .env && set +a && \
+	uv sync --extra producer && \
 	export PYTHONPATH=. && \
 	uv run python src/producer/main.py
 
 test-producer:
 	set -a && source .env && set +a && \
+	uv sync --extra producer --group dev && \
 	export PYTHONPATH=. && \
 	uv run pytest tests/producer/ -v --cov=src/producer
 
@@ -66,18 +68,24 @@ dbt-run:
 	set -a && source .env && set +a && \
 	cd src/batch_layer && \
 	export DBT_PROFILES_DIR=. && \
+	uv sync --extra batch && \
 	uv run dbt run --profiles-dir .
 
 dbt-test:
 	set -a && source .env && set +a && \
 	cd src/batch_layer && \
 	export DBT_PROFILES_DIR=. && \
+	uv sync --extra batch && \
 	uv run dbt test --profiles-dir .
 
 build-lambda:
 	mkdir -p src/speed_layer/package
 	uv export --only-group speed --no-hashes > src/speed_layer/requirements_lambda.txt
-	uv pip install --platform manylinux2014_x86_64 --target=src/speed_layer/package --implementation cp --python-version 3.12 --only-binary=:all: --upgrade -r src/speed_layer/requirements_lambda.txt
+	uv pip install \
+    --target=src/speed_layer/package \
+    --python-version 3.12 \
+    --system \
+    -r src/speed_layer/requirements_lambda.txt
 	cd src/speed_layer/package && zip -r9 ../speed_layer.zip .
 	cd src/speed_layer && zip -g speed_layer.zip app.py
 	rm src/speed_layer/requirements_lambda.txt

@@ -162,6 +162,16 @@ resource "snowflake_table" "stg_realtime" {
   }
 
   column {
+    name = "UPPER_BAND"
+    type = "FLOAT"
+  }
+
+  column {
+    name = "LOWER_BAND"
+    type = "FLOAT"
+  }
+
+  column {
     name = "TRADE_TIMESTAMP"
     type = "TIMESTAMP_NTZ(9)"
   }

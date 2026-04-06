@@ -1,76 +1,135 @@
 # Alpine Lambda Trade (ALT) 🏔️
 
-**Senior Data Engineering project focused on building a true Lambda Architecture (Batch + Speed layers) targeting AWS and Snowflake.**
+**Senior Data Engineering Project: High-Throughput Lambda Architecture (Batch + Speed layers) with AWS & Snowflake.**
 
-ALT consumes high-frequency Crypto Exchange data via WebSockets (Binance), dynamically buffering them into data lake blobs (historical processing), while actively passing live subsets into millisecond AWS Kinesis triggers for split-second volatility analysis - unifying them securely inside Snowflake's ecosystem.
+ALT consumes high-frequency Crypto Exchange data via WebSockets (Binance), dynamically buffering them into a Data Lake (S3/Parquet) for historical processing, while simultaneously routing live trade subsets through AWS SQS to trigger millisecond-latency Lambda functions for real-time volatility analysis.
 
-## 🏗️ Architecture
+-----
+
+## 🏗️ Architecture & Design
+
+The infrastructure is fully provisioned via **Terraform** (Infrastructure as Code), ensuring a reproducible, production-grade, and version-controlled environment.
 
 ```mermaid
 graph TD
-    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px;
-    classDef sf fill:#29B5E8,stroke:#1A6B8B,stroke-width:2px;
-    classDef python fill:#3776AB,stroke:#FFD43B,stroke-width:2px;
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
+    classDef sf fill:#29B5E8,stroke:#1A6B8B,stroke-width:2px,color:white;
+    classDef python fill:#3776AB,stroke:#FFD43B,stroke-width:2px,color:white;
+    
+    PROD[Multi-Path Producer<br/>Binance WebSockets]:::python
 
-    PROD[Multi-Path Producer<br>WebSockets]:::python
+    subgraph "Speed Layer (Latency < 1s)"
+        SQS[AWS SQS Queue]:::aws
+        L[AWS Lambda<br/>Bollinger & EMA Logic]:::aws
+    end
 
-    -- Speed Layer --> SQS[AWS SQS<br>Queue]:::aws
-    SQS --> L[AWS Lambda<br>EMA Logic]:::aws
+    subgraph "Batch Layer (Reliability)"
+        S3[AWS S3 Raw<br/>Parquet Blobs]:::aws
+        SP[Snowpipe<br/>Auto-Ingest]:::sf
+    end
     
-    -- Batch Layer --> S3[AWS S3<br>Raw Blob Parquet]:::aws
-    S3 -- SQS Event --> SP[Snowpipe<br>Auto-Ingest]:::sf
+    subgraph "Snowflake Warehouse"
+        SG_RAW[STAGING.RAW_TRADE]:::sf
+        SL[SILVER.SLV_TRADES]:::sf
+        SG_RT[STAGING.STG_REALTIME]:::sf
+        VW[VW_REALTIME_PORTFOLIO]:::sf
+    end
     
-    SP --> SG_RAW[STAGING.RAW_TRADE]:::sf
-    SG_RAW -- dbt Incremental --> SL[SILVER.SLV_TRADES]:::sf
-    
-    L -- Real-Time Insert --> SG_RT[STAGING.STG_REALTIME]:::sf
-    
-    SL --> VW[VW_REALTIME_PORTFOLIO]:::sf
+    PROD --> SQS
+    SQS --> L
+    PROD --> S3
+    S3 --> SP
+    SP --> SG_RAW
+    SG_RAW -- "dbt Incremental" --> SL
+    L -- "Fast Insert" --> SG_RT
+    SL --> VW
     SG_RT --> VW
-    
-    VW -- Pandas & Altair --> SM[Streamlit<br>Dashboard]:::python
+    VW --> SM[Streamlit Dashboard]:::python
 ```
 
----
+-----
 
-## 💡 Business Objectives
+## 💡 Business & Technical Objectives
 
-The architecture directly aims at resolving key Data Engineering challenges in Finance:
+This project solves the three core challenges of modern financial data pipelines:
 
-- **P1: Avoid Slippage (Volatility)**:
-   The AWS SQS and AWS Lambda pipeline process trades independently. Running stateless warm cache functions computes continuous Exponential Moving Averages (EMA) detecting spikes sub-second.
-   *(Note: The initial architecture leveraged Amazon Kinesis for high-throughput streaming. To remain strictly within the AWS Free Tier, the Speed Layer has been migrated to Amazon SQS. This demonstrates the system's flexibility and proficiency in utilizing both high-performance continuous streaming (Kinesis) and decoupled message queuing (SQS) solutions).*
-   
-- **P2: Auditability and Immutability (Histories)**:
-   A robust, deduplicated dbt Pipeline leverages Incremental loads to cast and save historical records forever as an absolute source of truth.
+### 1\. Volatility Detection & FinOps Strategy
 
-- **P3: The Live Portfolio Dilemma**:
-   Leveraging a `UNION ALL`, the `VW_REALTIME_PORTFOLIO` accurately masks dual histories, ignoring overlaps, to ensure you can see your active and past trades completely deduplicated in real-time.
+  * **The Challenge:** High-frequency markets require sub-second detection to avoid slippage.
+  * **The Solution:** The **Speed Layer** (SQS + Lambda) calculates **Bollinger Bands** (Upper/Lower) and **EMA** on-the-fly using a stateful "warm start" cache, flagging price anomalies (`SPIKE_DETECTED`) instantly.
+  * **FinOps Optimization:** Migrated from Kinesis to **Amazon SQS** to leverage a consumption-based pricing model (Free Tier friendly) without sacrificing performance.
 
-## 🚀 Getting Started
+### 2\. Auditability & Immutability (Historical Truth)
 
-### Pre-requisites
-- AWS Account securely synced (`aws configure`) or LocalStack.
-- Snowflake Trial or Account.
-- Python 3.10+ alongside `uv` installed.
+  * **The Challenge:** Real-time streams are prone to network retries, late arrivals, and duplicates.
+  * **The Solution:** A robust **dbt pipeline** uses **Incremental models** to persist historical records.
+  * **Deduplication Logic:** We ensure idempotence via window functions:
+    ```sql
+    SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY trade_id ORDER BY timestamp DESC) as rank
+        FROM {{ ref('stg_trades') }}
+    ) WHERE rank = 1
+    ```
 
-### Setup Process
+### 3\. Unified Serving Layer
+
+  * **The Challenge:** Reconciling "Old" (Batch) and "Live" (Speed) data without duplication.
+  * **The Solution:** A strategic `UNION ALL` in the `VW_REALTIME_PORTFOLIO` view masks overlaps, providing a single, consistent source of truth for the dashboard.
+
+-----
+
+## 🔍 Observability, Quality & Resilience
+
+  * **Pipeline Monitoring:** Tracking the **"Age of Oldest Message"** on SQS to monitor throughput bottlenecks.
+  * **Data Quality:** Systematic use of `dbt test` to enforce schema constraints (unique `trade_id`, non-null timestamps).
+  * **Resilience:** The Producer implements asynchronous error handling for WebSocket drops, ensuring zero-gap ingestion.
+  * **Snowflake Health:** Implementation of `dbt source freshness` to alert on stale data ingestion from S3.
+
+-----
+
+## 🚀 Roadmap: Scaling to Production
+
+  * **Event-Driven Orchestration:** Integrating **Kestra** or **Airflow 3** to manage the lifecycle of the Producer, dbt runs, and infrastructure checks.
+  * **Multi-Exchange Fallback:** Implementation of a circuit-breaker to switch between Binance, Kraken, and Coinbase APIs.
+  * **Error Handling:** Configuration of a **Dead Letter Queue (DLQ)** for malformed SQS payloads.
+
+-----
+
+## 🛠️ Execution & Setup
+
+### Prerequisites
+
+  - AWS CLI configured.
+  - Snowflake Account (Trial or Standard).
+  - Python 3.10+ (Recommended: `uv`).
+
+### Deployment
 
 ```bash
-# Set up environments
-cp .env.example .env
-# Fill it out!
+# 1. Setup Environment
+cp .env.example .env  # Update with your credentials
 
-# 1. Spawn infrastructural pipelines natively
+# 2. Provision Infrastructure
 make init
 make apply
 
-# 2. Run the Producers to feed Kinesis and S3
-make run-producer
-
-# 3. Create historical pipelines using DBT
-make dbt-run
-
-# 4. View the dashboard!
-make run-dashboard
+# 3. Launch Pipeline
+make run-producer  # Start WebSocket feed
+make dbt-run       # Run transformations
+make run-dashboard # Launch Streamlit UI
 ```
+
+-----
+
+## 📚 Research & References
+
+To ensure industry-standard reliability, this project is grounded in the following technical foundations:
+
+  * **[The Lambda Architecture](https://www.oreilly.com/library/view/big-data/9781617290343/) (Marz & Warren):** The core design pattern for balancing low-latency (Speed) with high-throughput (Batch).
+  * **[Statistical Monitoring of High-Frequency Data](https://www.google.com/search?q=https://www.researchgate.net/publication/228260655_Statistical_Methods_for_High-Frequency_Data_Analysis):** Theoretical basis for using Bollinger Bands and moving averages for anomaly detection.
+  * **[The Unified Logging Layer (Jay Kreps)](https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying):** Foundation for using decoupled, log-based messaging (SQS) to ensure system durability.
+
+-----
+
+*Developed by Michael GARCIA — Built for Scale, Cost-Efficiency, and Resilience.*
+

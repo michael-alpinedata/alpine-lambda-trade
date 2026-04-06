@@ -22,7 +22,7 @@ class SQSClient:
         self.sqs = boto3.client('sqs', **client_kwargs)
         try:
             # We fetch the QueueUrl dynamically from its name
-            response = self.sqs.get_queue_url(QueueName='alt-ticker-queue')
+            response = self.sqs.get_queue_url(QueueName='alt-ticker-queue.fifo')
             self.queue_url = response['QueueUrl']
             logger.info(f"SQS Queue URL initialized: {self.queue_url}")
         except Exception as e:
@@ -37,7 +37,9 @@ class SQSClient:
         for trade in trades:
             entries.append({
                 'Id': str(uuid.uuid4()),
-                'MessageBody': json.dumps(trade)
+                'MessageBody': json.dumps(trade),
+                'MessageGroupId': trade.get('symbol', 'default'),
+                'MessageDeduplicationId': str(trade.get('id', uuid.uuid4()))
             })
             
         try:

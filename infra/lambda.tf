@@ -61,5 +61,4 @@ resource "aws_lambda_event_source_mapping" "sqs_trigger" {
   event_source_arn                   = aws_sqs_queue.ticker_queue.arn
   function_name                      = aws_lambda_function.speed_layer.arn
   batch_size                         = 10
-  maximum_batching_window_in_seconds = 5
 }
