@@ -11,6 +11,7 @@ class ProducerSettings(BaseSettings):
     kinesis_stream_name: str = "alt-ticker-stream"
     
     exchange_id: str = "binance"
+    slack_webhook_url: str | None = None
     symbols: str = "BTC/USDT,ETH/USDT"
     
     s3_dump_interval_seconds: int = 300  # 5 minutes
