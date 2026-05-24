@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: stg_trades
+    description: "Casting and initial parsing of raw trades from S3 (Bronze layer)."
+    columns:
+      - name: trade_id
+        description: "Unique trade identifier"
+        tests:
+          - not_null
+      - name: symbol
+        description: "Currency pair (e.g. BTC/USDT)"
+        tests:
+          - not_null
+      - name: trade_timestamp
+        description: "Timestamp of the trade"
+        tests:
+          - not_null

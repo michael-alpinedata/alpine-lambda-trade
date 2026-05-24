@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: slv_trades
+    description: "Cleansed and deduplicated trades (Silver layer)."
+    columns:
+      - name: trade_id
+        description: "Primary Key (Deduplicated)"
+        tests:
+          - unique
+          - not_null
+      - name: price
+        description: "Trade price (float)"
+        tests:
+          - not_null
+      - name: trade_timestamp
+        description: "Standardized timestamp"
+        tests:
+          - not_null

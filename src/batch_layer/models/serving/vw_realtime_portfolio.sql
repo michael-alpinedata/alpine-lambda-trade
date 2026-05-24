@@ -12,7 +12,7 @@ WITH historical AS (
         CAST(r.upper_band AS FLOAT) as upper_band,
         CAST(r.lower_band AS FLOAT) as lower_band
     FROM {{ ref('slv_trades') }} h
-    LEFT JOIN {{ source('alpine_lambda_trade_source', 'STG_REALTIME') }} r 
+    LEFT JOIN {{ source('alpine_lambda_trade_source', 'REALTIME_TRADE') }} r 
         ON h.trade_id = r.trade_id
 ),
 
@@ -28,7 +28,7 @@ real_time AS (
         CAST(ema AS FLOAT) as ema,
         CAST(upper_band AS FLOAT) as upper_band,
         CAST(lower_band AS FLOAT) as lower_band
-    FROM {{ source('alpine_lambda_trade_source', 'STG_REALTIME') }}
+    FROM {{ source('alpine_lambda_trade_source', 'REALTIME_TRADE') }}
     -- Filter out overlaps seamlessly
     WHERE trade_timestamp > COALESCE((SELECT MAX(trade_timestamp) FROM historical), '1970-01-01'::TIMESTAMP)
 )

@@ -1,0 +1,8 @@
+version: 2
+sources:
+  - name: alpine_lambda_trade_source
+    database: ALT_DB
+    schema: BRONZE
+    tables:
+      - name: RAW_TRADE
+      - name: REALTIME_TRADE

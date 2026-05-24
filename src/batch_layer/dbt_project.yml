@@ -17,12 +17,12 @@ clean-targets:
 
 models:
   alpine_lambda_trade:
-    staging:
+    bronze:
       +materialized: view
-      +schema: STAGING
+      +schema: BRONZE
     silver:
       +materialized: incremental
       +schema: SILVER
     serving:
       +materialized: view
-      +schema: SERVING
+      +schema: GOLD

@@ -8,7 +8,7 @@ WITH staged AS (
 
 {% if is_incremental() %}
     -- Process only new records (comparing on the internal timestamp)
-    WHERE trade_timestamp > (SELECT max(trade_timestamp) FROM {{ this }})
+    WHERE trade_timestamp > coalesce((SELECT max(trade_timestamp) FROM {{ this }}), '1970-01-01'::TIMESTAMP)
 {% endif %}
 ),
 

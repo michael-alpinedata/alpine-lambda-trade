@@ -9,5 +9,5 @@ alpine_lambda_trade:
       role: "ALT_ENGINEER"
       database: "ALT_DB"
       warehouse: "ALT_WH"
-      schema: "STAGING"
+      schema: "BRONZE"
       threads: 4
