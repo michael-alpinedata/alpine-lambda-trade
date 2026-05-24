@@ -1,0 +1,29 @@
+apiVersion: 1
+
+datasources:
+  - name: CloudWatch
+    uid: CloudWatch
+    type: cloudwatch
+    accessControl:
+      # Optional: restrictive permissions if needed
+    jsonData:
+      authType: keys
+      defaultRegion: ${AWS_REGION}
+    secureJsonData:
+      accessKey: ${AWS_ACCESS_KEY_ID}
+      secretKey: ${AWS_SECRET_ACCESS_KEY}
+    editable: true
+
+  - name: Snowflake
+    uid: Snowflake
+    type: grafana-snowflake-datasource
+    jsonData:
+      account: ${SNOWFLAKE_ACCOUNT}
+      user: ${SNOWFLAKE_USER}
+      role: ${SNOWFLAKE_ROLE}
+      warehouse: ALT_WH
+      database: ALT_DB
+      schema: GOLD
+    secureJsonData:
+      password: ${SNOWFLAKE_PASSWORD}
+    editable: true

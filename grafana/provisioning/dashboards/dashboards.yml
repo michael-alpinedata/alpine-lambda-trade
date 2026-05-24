@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'ALT Dashboards'
+    orgId: 1
+    folder: 'ALT'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/dashboards

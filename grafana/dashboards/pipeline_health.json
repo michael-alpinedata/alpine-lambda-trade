@@ -1,0 +1,404 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "alias": "Main Queue Depth",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "dimensions": {
+            "QueueName": "alt-ticker-queue.fifo"
+          },
+          "metricName": "ApproximateNumberOfMessagesVisible",
+          "namespace": "AWS/SQS",
+          "period": "60",
+          "region": "eu-north-1",
+          "refId": "A",
+          "statistic": "Average",
+          "metricQueryType": 0,
+          "queryMode": "Metrics",
+          "matchExact": true
+        }
+      ],
+      "title": "Speed Layer Backlog (SQS)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "alias": "Oldest Message Age",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "dimensions": {
+            "QueueName": "alt-ticker-queue.fifo"
+          },
+          "metricName": "ApproximateAgeOfOldestMessage",
+          "namespace": "AWS/SQS",
+          "period": "60",
+          "region": "eu-north-1",
+          "refId": "A",
+          "statistic": "Maximum",
+          "metricQueryType": 0,
+          "queryMode": "Metrics",
+          "matchExact": true
+        }
+      ],
+      "title": "Ingestion Latency (Age of Oldest Message)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "alias": "DLQ Depth",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "dimensions": {
+            "QueueName": "alt-ticker-dlq.fifo"
+          },
+          "metricName": "ApproximateNumberOfMessagesVisible",
+          "namespace": "AWS/SQS",
+          "period": "60",
+          "region": "eu-north-1",
+          "refId": "A",
+          "statistic": "Maximum",
+          "metricQueryType": 0,
+          "queryMode": "Metrics",
+          "matchExact": true
+        }
+      ],
+      "title": "DLQ Messages (Failures)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "CloudWatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "alias": "Invocations",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "dimensions": {
+            "FunctionName": "alt-speed-ema-processor"
+          },
+          "metricName": "Invocations",
+          "namespace": "AWS/Lambda",
+          "period": "60",
+          "region": "eu-north-1",
+          "refId": "A",
+          "statistic": "Sum",
+          "metricQueryType": 0,
+          "queryMode": "Metrics",
+          "matchExact": true
+        },
+        {
+          "alias": "Errors",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "CloudWatch"
+          },
+          "dimensions": {
+            "FunctionName": "alt-speed-ema-processor"
+          },
+          "metricName": "Errors",
+          "namespace": "AWS/Lambda",
+          "period": "60",
+          "region": "eu-north-1",
+          "refId": "B",
+          "statistic": "Sum",
+          "metricQueryType": 0,
+          "queryMode": "Metrics",
+          "matchExact": true
+        }
+      ],
+      "title": "Lambda Processing Performance",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "alt",
+    "lambda-trade"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Pipeline Health Summary",
+  "uid": "alt_pipeline_health",
+  "version": 1,
+  "weekStart": ""
+}
