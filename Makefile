@@ -16,6 +16,9 @@ help:
 	@echo "  make dbt-test       : Run dbt schema tests (Sprint 3)"
 	@echo "  make build-lambda   : Build python zip package for Lambda (Sprint 4)"
 	@echo "  make run-dashboard  : Run Streamlit dashboard (Sprint 5)"
+	@echo "  make obs-up         : Start Observability stack (Grafana + Kestra)"
+	@echo "  make obs-logs       : View Observability logs"
+	@echo "  make obs-down       : Stop Observability stack"
 
 init:
 	cd infra && \
@@ -94,3 +97,12 @@ run-dashboard:
 	set -a && source .env && set +a && \
 	uv sync --extra serving && \
 	uv run streamlit run src/serving_layer/dashboard.py
+
+obs-up:
+	docker compose up -d grafana kestra postgres
+
+obs-logs:
+	docker compose logs -f grafana kestra
+
+obs-down:
+	docker compose stop grafana kestra postgres

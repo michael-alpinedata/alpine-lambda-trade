@@ -29,9 +29,9 @@ graph TD
     end
     
     subgraph "Snowflake Warehouse"
-        SG_RAW[STAGING.RAW_TRADE]:::sf
+        SG_RAW[BRONZE.RAW_TRADE]:::sf
         SL[SILVER.SLV_TRADES]:::sf
-        SG_RT[STAGING.STG_REALTIME]:::sf
+        SG_RT[BRONZE.REALTIME_TRADE]:::sf
         VW[VW_REALTIME_PORTFOLIO]:::sf
     end
     

@@ -13,12 +13,12 @@ def check_data():
             password=os.environ['SNOWFLAKE_PASSWORD'],
             account=os.environ['SNOWFLAKE_ACCOUNT'],
             database='ALT_DB',
-            schema='STAGING'
+            schema='BRONZE'
         )
         
         cursor = conn.cursor()
-        print("Querying STG_REALTIME...")
-        cursor.execute("SELECT * FROM STG_REALTIME ORDER BY TRADE_TIMESTAMP DESC LIMIT 5")
+        print("Querying REALTIME_TRADE...")
+        cursor.execute("SELECT * FROM REALTIME_TRADE ORDER BY TRADE_TIMESTAMP DESC LIMIT 5")
         columns = [col[0] for col in cursor.description]
         results = cursor.fetchall()
         df = pd.DataFrame(results, columns=columns)
