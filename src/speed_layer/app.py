@@ -23,7 +23,7 @@ def get_snowflake_connection():
         password=os.environ['SNOWFLAKE_PASSWORD'],
         account=os.environ['SNOWFLAKE_ACCOUNT'],
         database='ALT_DB',
-        schema='STAGING'
+        schema='BRONZE'
     )
 
 def lambda_handler(event, context):
@@ -68,25 +68,25 @@ def lambda_handler(event, context):
         
         # Bollinger Bands Calculation
         prices_window = list(ema_cache[symbol]['prices'])
-        std_dev = np.std(prices_window) if len(prices_window) > 1 else 0
-        upper_band = current_ema + (2 * std_dev)
-        lower_band = current_ema - (2 * std_dev)
+        std_dev = float(np.std(prices_window)) if len(prices_window) > 1 else 0.0
+        upper_band = float(current_ema + (2 * std_dev))
+        lower_band = float(current_ema - (2 * std_dev))
         
-        spike_detected = abs(price - current_ema) / current_ema > THRESHOLD
+        spike_detected = bool(abs(price - current_ema) / current_ema > THRESHOLD)
 
         records_to_insert.append((
-            trade_id, symbol, price, current_ema, upper_band, lower_band, spike_detected, dt
+            trade_id, symbol, float(price), float(current_ema), upper_band, lower_band, spike_detected, dt
         ))
         
     if records_to_insert:
         try:
             cursor = sf_conn.cursor()
             query = """
-            INSERT INTO STG_REALTIME (TRADE_ID, SYMBOL, PRICE, EMA, UPPER_BAND, LOWER_BAND, SPIKE_DETECTED, TRADE_TIMESTAMP)
+            INSERT INTO REALTIME_TRADE (TRADE_ID, SYMBOL, PRICE, EMA, UPPER_BAND, LOWER_BAND, SPIKE_DETECTED, TRADE_TIMESTAMP)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.executemany(query, records_to_insert)
-            logger.info(f"Inserted {len(records_to_insert)} records into STG_REALTIME successfully.")
+            logger.info(f"Inserted {len(records_to_insert)} records into REALTIME_TRADE successfully.")
         except Exception as e:
             logger.error(f"Snowflake Insert Error: {e}")
             raise e
