@@ -1,8 +1,0 @@
-version: 2
-sources:
-  - name: alpine_lambda_trade_source
-    database: ALT_DB
-    schema: STAGING
-    tables:
-      - name: RAW_TRADE
-      - name: STG_REALTIME

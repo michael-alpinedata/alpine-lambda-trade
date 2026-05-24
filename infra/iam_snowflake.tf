@@ -14,11 +14,11 @@ resource "aws_iam_role" "snowflake_s3_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::473991839816:user/p1lh1000-s"
+          AWS = snowflake_storage_integration.alt_s3_integration.storage_aws_iam_user_arn
         }
         Condition = {
           StringEquals = {
-            "sts:ExternalId" = "TQ80360_SFCRole=4_PfxHviHk0Q+01FKizgJXu7Aqg60="
+            "sts:ExternalId" = snowflake_storage_integration.alt_s3_integration.storage_aws_external_id
           }
         }
       }
