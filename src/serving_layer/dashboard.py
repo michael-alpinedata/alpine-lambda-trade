@@ -3,6 +3,8 @@ import snowflake.connector
 import pandas as pd
 import altair as alt
 import os
+import boto3
+import logging
 
 st.set_page_config(page_title="ALT Real-Time Portfolio", layout="wide")
 
@@ -13,12 +15,31 @@ def init_connection():
         password=os.environ["SNOWFLAKE_PASSWORD"],
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         database="ALT_DB",
-        schema="STAGING" 
+        schema="GOLD" 
     )
 
 sf = init_connection()
 
+def get_sqs_dlq_depth():
+    """Check the number of messages in the Dead Letter Queue."""
+    try:
+        sqs = boto3.client('sqs', region_name='eu-north-1') # Update region if necessary
+        queue_url = sqs.get_queue_url(QueueName='alt-ticker-dlq.fifo')['QueueUrl']
+        attributes = sqs.get_queue_attributes(
+            QueueUrl=queue_url,
+            AttributeNames=['ApproximateNumberOfMessages']
+        )
+        return int(attributes['Attributes']['ApproximateNumberOfMessages'])
+    except Exception as e:
+        st.sidebar.error(f"Error checking DLQ: {e}")
+        return 0
+
 st.title("🚀 Alpine Lambda Trade (ALT) - Real-Time Portfolio")
+
+# DLQ Monitoring Alert
+dlq_depth = get_sqs_dlq_depth()
+if dlq_depth > 0:
+    st.error(f"⚠️ **RELIABILITY ALERT**: {dlq_depth} messages detected in the Dead Letter Queue (DLQ). Ingestion may be failing for some records.")
 
 @st.cache_data(ttl=5) # Real-Time caching every 5 seconds
 def get_historical_data():
@@ -33,7 +54,7 @@ def get_historical_data():
         EMA,
         UPPER_BAND,
         LOWER_BAND
-    FROM ALT_DB.STAGING_SERVING.VW_REALTIME_PORTFOLIO
+    FROM ALT_DB.GOLD.VW_REALTIME_PORTFOLIO
     ORDER BY TRADE_TIMESTAMP DESC
     LIMIT 2000
     """)
@@ -50,7 +71,7 @@ def get_kpis():
     SELECT 
         COUNT(*) as TOTAL_TRADES,
         SUM(IFF(SPIKE_DETECTED = TRUE AND TRADE_TIMESTAMP >= DATEADD(HOUR, -1, CURRENT_TIMESTAMP()), 1, 0)) as RECENT_SPIKES
-    FROM ALT_DB.STAGING_SERVING.VW_REALTIME_PORTFOLIO
+    FROM ALT_DB.GOLD.VW_REALTIME_PORTFOLIO
     """
     cursor.execute(query)
     return cursor.fetch_pandas_all()
@@ -141,12 +162,12 @@ if not df.empty:
         # 5. Layer everything
         combined = alt.layer(bollinger_band, ema_line, price_line, spikes).resolve_scale(color='independent')
         
-        st.altair_chart(combined, use_container_width=True)
+        st.altair_chart(combined, width='stretch')
 
 st.subheader("Last 50 Ledger Transactions")
 # Style dataframe to highlight the source
 if not df.empty:
-    st.dataframe(df.head(50), use_container_width=True)
+    st.dataframe(df.head(50), width='stretch')
 
 # Auto-refresh du dashboard toutes les 5 secondes
 import time
