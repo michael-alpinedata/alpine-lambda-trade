@@ -1,5 +1,7 @@
 # Alpine Lambda Trade (ALT) 🏔️
 
+![Trading System Architecture](docs/Trading_System_Architecture.png)
+
 **Senior Data Engineering Project: High-Throughput Lambda Architecture (Batch + Speed layers) with AWS & Snowflake.**
 
 ALT consumes high-frequency Crypto Exchange data via WebSockets (Binance), dynamically buffering them into a Data Lake (S3/Parquet) for historical processing, while simultaneously routing live trade subsets through AWS SQS to trigger millisecond-latency Lambda functions for real-time volatility analysis.
