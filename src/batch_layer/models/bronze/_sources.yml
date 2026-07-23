@@ -1,8 +1,13 @@
 version: 2
+
 sources:
   - name: alpine_lambda_trade_source
     database: ALT_DB
     schema: BRONZE
     tables:
       - name: RAW_TRADE
+        loaded_at_field: "PAYLOAD:timestamp::TIMESTAMP"
+        freshness:
+          warn_after: {count: 15, period: minute}
+          error_after: {count: 1, period: hour}
       - name: REALTIME_TRADE
