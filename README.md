@@ -2,9 +2,38 @@
 
 ![Trading System Architecture](docs/Trading_System_Architecture.png)
 
-**Senior Data Engineering Project: High-Throughput Lambda Architecture (Batch + Speed layers) with AWS & Snowflake.**
+**High-Throughput Lambda Architecture (Batch + Speed layers) with AWS & Snowflake.**
 
 ALT consumes high-frequency Crypto Exchange data via WebSockets (Binance), dynamically buffering them into a Data Lake (S3/Parquet) for historical processing, while simultaneously routing live trade subsets through AWS SQS to trigger millisecond-latency Lambda functions for real-time volatility analysis.
+
+-----
+
+## 💡 Business & Technical Objectives
+
+This project solves the three core challenges of modern financial data pipelines:
+
+### 1\. Volatility Detection & FinOps Strategy
+
+  * **The Challenge:** High-frequency markets require sub-second detection to avoid slippage.
+  * **The Solution:** The **Speed Layer** (SQS + Lambda) calculates **Bollinger Bands** (Upper/Lower) and **EMA** on-the-fly using a stateful "warm start" cache, flagging price anomalies (`SPIKE_DETECTED`) instantly.
+  * **FinOps Optimization:** Migrated from Kinesis to **Amazon SQS** to leverage a consumption-based pricing model (Free Tier friendly) without sacrificing performance.
+
+### 2\. Auditability & Immutability (Historical Truth)
+
+  * **The Challenge:** Real-time streams are prone to network retries, late arrivals, and duplicates.
+  * **The Solution:** A robust **dbt pipeline** uses **Incremental models** to persist historical records.
+  * **Deduplication Logic:** We ensure idempotence via window functions:
+    ```sql
+    SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY trade_id ORDER BY timestamp DESC) as rank
+        FROM {{ ref('stg_trades') }}
+    ) WHERE rank = 1
+    ```
+
+### 3\. Unified Serving Layer
+
+  * **The Challenge:** Reconciling "Old" (Batch) and "Live" (Speed) data without duplication.
+  * **The Solution:** A strategic `UNION ALL` in the `VW_REALTIME_PORTFOLIO` view masks overlaps, providing a single, consistent source of truth for the dashboard.
 
 -----
 
@@ -48,35 +77,6 @@ graph TD
     SG_RT --> VW
     VW --> SM[Streamlit Dashboard]:::python
 ```
-
------
-
-## 💡 Business & Technical Objectives
-
-This project solves the three core challenges of modern financial data pipelines:
-
-### 1\. Volatility Detection & FinOps Strategy
-
-  * **The Challenge:** High-frequency markets require sub-second detection to avoid slippage.
-  * **The Solution:** The **Speed Layer** (SQS + Lambda) calculates **Bollinger Bands** (Upper/Lower) and **EMA** on-the-fly using a stateful "warm start" cache, flagging price anomalies (`SPIKE_DETECTED`) instantly.
-  * **FinOps Optimization:** Migrated from Kinesis to **Amazon SQS** to leverage a consumption-based pricing model (Free Tier friendly) without sacrificing performance.
-
-### 2\. Auditability & Immutability (Historical Truth)
-
-  * **The Challenge:** Real-time streams are prone to network retries, late arrivals, and duplicates.
-  * **The Solution:** A robust **dbt pipeline** uses **Incremental models** to persist historical records.
-  * **Deduplication Logic:** We ensure idempotence via window functions:
-    ```sql
-    SELECT * FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY trade_id ORDER BY timestamp DESC) as rank
-        FROM {{ ref('stg_trades') }}
-    ) WHERE rank = 1
-    ```
-
-### 3\. Unified Serving Layer
-
-  * **The Challenge:** Reconciling "Old" (Batch) and "Live" (Speed) data without duplication.
-  * **The Solution:** A strategic `UNION ALL` in the `VW_REALTIME_PORTFOLIO` view masks overlaps, providing a single, consistent source of truth for the dashboard.
 
 -----
 
@@ -133,5 +133,5 @@ To ensure industry-standard reliability, this project is grounded in the followi
 
 -----
 
-*Developed by Michael GARCIA — Built for Scale, Cost-Efficiency, and Resilience.*
+*Developed by Michael GARCIA (Alpine Data) — Built for Scale, Cost-Efficiency, and Resilience.*
 
