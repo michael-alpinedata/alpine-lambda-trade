@@ -1,0 +1,5 @@
+# infra/terraform.tfvars.example
+snowflake_account = "ORG-ACCOUNT"
+snowflake_user    = "alt_terraform_user"
+snowflake_password = "YOUR_SECURE_PASSWORD"
+snowflake_role    = "ACCOUNTADMIN"

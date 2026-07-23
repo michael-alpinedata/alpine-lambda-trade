@@ -1,137 +1,234 @@
 # Alpine Lambda Trade (ALT) 🏔️
 
-![Trading System Architecture](docs/Trading_System_Architecture.webp)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
+![Terraform](https://img.shields.io/badge/terraform-%235835CC.svg?style=flat&logo=terraform&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=flat&logo=amazon-aws&logoColor=white)
+![Snowflake](https://img.shields.io/badge/Snowflake-%2329B5E8.svg?style=flat&logo=snowflake&logoColor=white)
+![dbt](https://img.shields.io/badge/dbt-%23FF694B.svg?style=flat&logo=dbt&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-%23F46800.svg?style=flat&logo=grafana&logoColor=white)
 
 **High-Throughput Lambda Architecture (Batch + Speed layers) with AWS & Snowflake.**
 
-ALT consumes high-frequency Crypto Exchange data via WebSockets (Binance), dynamically buffering them into a Data Lake (S3/Parquet) for historical processing, while simultaneously routing live trade subsets through AWS SQS to trigger millisecond-latency Lambda functions for real-time volatility analysis.
+ALT is a high-frequency crypto analytics data platform built using a Lambda Architecture. It consumes real-time WebSocket feeds, simultaneously feeding a **Data Lake (AWS S3)** for historical archiving and a **Speed Layer (AWS SQS FIFO + Lambda)** with sub-second latency for market anomaly detection, all consolidated within **Snowflake**.
 
------
+---
 
-## 💡 Business & Technical Objectives
+## 📑 Table of Contents
 
-This project solves the three core challenges of modern financial data pipelines:
+* [Business Value & Problem Solving](#-business-value--problem-solving)
+* [Technical Architecture & Data Flow](#️-technical-architecture--data-flow)
+* [Tech Stack Standards](#️-tech-stack-standards)
+* [Grafana Observability & Dashboards](#-grafana-observability--dashboards)
+* [Deep Dive: Implementation & Governance](#-deep-dive-implementation--governance)
+* [Repository Structure](#-repository-structure)
+* [Getting Started & Execution Guide](#-getting-started--execution-guide)
 
-### 1\. Volatility Detection & FinOps Strategy
+---
 
-  * **The Challenge:** High-frequency markets require sub-second detection to avoid slippage.
-  * **The Solution:** The **Speed Layer** (SQS + Lambda) calculates **Bollinger Bands** (Upper/Lower) and **EMA** on-the-fly using a stateful "warm start" cache, flagging price anomalies (`SPIKE_DETECTED`) instantly.
-  * **FinOps Optimization:** Migrated from Kinesis to **Amazon SQS** to leverage a consumption-based pricing model (Free Tier friendly) without sacrificing performance.
+## 💡 Business Value & Problem Solving
 
-### 2\. Auditability & Immutability (Historical Truth)
+This architecture directly addresses the three major challenges of financial data pipelines:
 
-  * **The Challenge:** Real-time streams are prone to network retries, late arrivals, and duplicates.
-  * **The Solution:** A robust **dbt pipeline** uses **Incremental models** to persist historical records.
-  * **Deduplication Logic:** We ensure idempotence via window functions:
-    ```sql
-    SELECT * FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY trade_id ORDER BY timestamp DESC) as rank
-        FROM {{ ref('stg_trades') }}
-    ) WHERE rank = 1
-    ```
+### 🎯 P1: Slippage Risk & Volatility Detection (< 1s)
+* **Problem:** In high-frequency trading, a 2% price shift in 60 seconds can invalidate an execution strategy.
+* **Solution ALT:** The **Speed Layer** (SQS FIFO -> AWS Lambda) computes Exponential Moving Averages (EMA) and Bollinger Bands in real-time using a "warm start" state cache. Volatility spikes (`SPIKE_DETECTED`) are written directly to Snowflake in under a second.
 
-### 3\. Unified Serving Layer
+### 📜 P2: Auditability & Single Source of Truth (Historical)
+* **Problem:** Real-time streams suffer from re-deliveries, out-of-order events, and corrupted data, making backtests unreliable.
+* **Solution ALT:** The **Batch Layer** (S3 Parquet -> Snowpipe -> dbt Core) guarantees immutable storage and strict deduplication via analytical window functions in incremental dbt models (Silver layer):
+```sql
+  SELECT * FROM (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY trade_id ORDER BY trade_timestamp DESC) as rn
+      FROM {{ ref('stg_trades') }}
+  ) WHERE rn = 1
 
-  * **The Challenge:** Reconciling "Old" (Batch) and "Live" (Speed) data without duplication.
-  * **The Solution:** A strategic `UNION ALL` in the `VW_REALTIME_PORTFOLIO` view masks overlaps, providing a single, consistent source of truth for the dashboard.
-
------
-
-## 🏗️ Architecture & Design
-
-The infrastructure is fully provisioned via **Terraform** (Infrastructure as Code), ensuring a reproducible, production-grade, and version-controlled environment.
-
-```mermaid
-graph TD
-    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
-    classDef sf fill:#29B5E8,stroke:#1A6B8B,stroke-width:2px,color:white;
-    classDef python fill:#3776AB,stroke:#FFD43B,stroke-width:2px,color:white;
-    
-    PROD[Multi-Path Producer<br/>Binance WebSockets]:::python
-
-    subgraph "Speed Layer (Latency < 1s)"
-        SQS[AWS SQS Queue]:::aws
-        L[AWS Lambda<br/>Bollinger & EMA Logic]:::aws
-    end
-
-    subgraph "Batch Layer (Reliability)"
-        S3[AWS S3 Raw<br/>Parquet Blobs]:::aws
-        SP[Snowpipe<br/>Auto-Ingest]:::sf
-    end
-    
-    subgraph "Snowflake Warehouse"
-        SG_RAW[BRONZE.RAW_TRADE]:::sf
-        SL[SILVER.SLV_TRADES]:::sf
-        SG_RT[BRONZE.REALTIME_TRADE]:::sf
-        VW[VW_REALTIME_PORTFOLIO]:::sf
-    end
-    
-    PROD --> SQS
-    SQS --> L
-    PROD --> S3
-    S3 --> SP
-    SP --> SG_RAW
-    SG_RAW -- "dbt Incremental" --> SL
-    L -- "Fast Insert" --> SG_RT
-    SL --> VW
-    SG_RT --> VW
-    VW --> SM[Streamlit Dashboard]:::python
 ```
 
------
+### 📊 P3: Live Portfolio Valuation & P&L (Up-to-the-millisecond)
 
-## 🔍 Observability, Quality & Resilience
+* **Problem:** Portfolio managers often experience a 15-minute delay in P&L valuation.
+* **Solution ALT:** The **Serving Layer** (`GOLD.VW_REALTIME_PORTFOLIO`) performs a strategic fusion (`UNION ALL`) between consolidated historical transactions and real-time streams.
 
-  * **Pipeline Monitoring:** Tracking the **"Age of Oldest Message"** on SQS to monitor throughput bottlenecks.
-  * **Data Quality:** Systematic use of `dbt test` to enforce schema constraints (unique `trade_id`, non-null timestamps).
-  * **Resilience:** The Producer implements asynchronous error handling for WebSocket drops, ensuring zero-gap ingestion.
-  * **Snowflake Health:** Implementation of `dbt source freshness` to alert on stale data ingestion from S3.
+---
 
------
+## 🏗️ Technical Architecture & Data Flow
 
-## 🚀 Roadmap: Scaling to Production
+All infrastructure is provisioned as Infrastructure as Code (IaC) via **Terraform** adhering to least-privilege principles and cost governance.
 
-  * **Event-Driven Orchestration:** Integrating **Kestra** or **Airflow 3** to manage the lifecycle of the Producer, dbt runs, and infrastructure checks.
-  * **Multi-Exchange Fallback:** Implementation of a circuit-breaker to switch between Binance, Kraken, and Coinbase APIs.
-  * **Error Handling:** Configuration of a **Dead Letter Queue (DLQ)** for malformed SQS payloads.
+---
 
------
+## 🛠️ Tech Stack Standards
 
-## 🛠️ Execution & Setup
+* **Language & Runtime:** Python 3.12, Asyncio, `ccxt.pro` (WebSockets), Pydantic, Boto3.
+* **Infrastructure as Code (IaC):** Terraform (AWS & Snowflake Provider).
+* **Batch Ingestion & Storage:** AWS S3 (Snappy Parquet compression), Snowpipe SQS auto-ingest.
+* **Streaming & Event-Driven:** AWS SQS FIFO (Redrive Policy & DLQ), AWS Lambda.
+* **Data Warehouse & Transformations:** Snowflake (`BRONZE`, `SILVER`, `GOLD`), dbt Core 1.x (Incremental models, Schema constraints & Freshness checks).
+* **Orchestration & Containerization:** Kestra, Docker Compose (PostgreSQL, Kestra, Grafana).
+* **Monitoring & Visualization:** Streamlit (Altair charts), Grafana (CloudWatch & Snowflake Datasources).
+* **Testing & Quality:** Pytest, Moto (AWS Mocking).
 
-### Prerequisites
+---
 
-  - AWS CLI configured.
-  - Snowflake Account (Trial or Standard).
-  - Python 3.10+ (Recommended: `uv`).
+## 📊 Grafana Observability & Dashboards
 
-### Deployment
+The project includes provisioned Grafana data sources and pre-built dashboards (`grafana/`) to monitor pipeline health in real time:
+
+```text
++-------------------------------------------------------------------------+
+|                  ALT PLATFORM OBSERVABILITY DASHBOARD                   |
++-----------------------------+-------------------------------------------+
+| [AWS CloudWatch Datasource] | • Lambda Ingestion Latency (< 500ms)      |
+|                             | • SQS FIFO Queue Depth & DLQ Message Rate |
+|                             | • Circuit-Breaker Failover Events         |
++-----------------------------+-------------------------------------------+
+| [Snowflake Datasource]      | • Snowpipe Ingestion Status & Row Counts  |
+|                             | • Virtual Warehouse Credit Consumption    |
+|                             | • Real-time P&L Query Execution Times     |
++-----------------------------+-------------------------------------------+
+
+```
+
+---
+
+## ⚙️ Deep Dive: Implementation & Governance
+
+### 1. Resilient Ingestion: Multi-Exchange Circuit-Breaker
+
+The producer (`src/producer/exchange_stream.py`) handles WebSocket connection drops automatically. Upon repeated failures on the primary exchange (e.g., Binance), it transparently fails over to a secondary exchange (Kraken, Coinbase) and triggers a Slack alert.
+
+### 2. FinOps & Cost Governance
+
+* **SQS FIFO Migration:** Replaced permanent Kinesis shards with an on-demand SQS FIFO queue.
+* **Snowflake Auto-Suspend:** The `ALT_WH` Virtual Warehouse (X-Small size) automatically suspends after **60 seconds** of inactivity.
+* **Parquet Format & Partitioning:** S3 storage optimized under path `ticker/YYYY/MM/DD/HH/trades_[timestamp].parquet` to minimize Snowpipe query scan costs.
+
+### 3. Observability & Dead Letter Queue (DLQ)
+
+If an SQS message fails processing 3 times in the Speed Layer Lambda, it routes to `alt-ticker-dlq.fifo`. The Streamlit dashboard polls SQS DLQ metrics in real-time and renders system alerts if any records encounter failures.
+
+---
+
+## 📁 Repository Structure
+
+```text
+alpine-lambda-trade/
+├── Makefile                        # Command center (init, apply, run, test)
+├── docker-compose.yml              # Kestra, Postgres & Grafana stack
+├── infra/                          # Terraform modules (AWS & Snowflake)
+│   ├── providers.tf
+│   ├── s3.tf                       # Bucket & Snowpipe notifications
+│   ├── sqs.tf                      # FIFO Queue & Dead Letter Queue
+│   ├── lambda.tf                   # Speed Layer Lambda function
+│   ├── snowflake.tf                # DB, Schemas, Warehouse & RBAC Roles
+│   ├── iam_producer.tf             # Producer IAM policies
+│   └── iam_snowflake.tf            # Storage Integration IAM
+├── kestra/                         # Orchestration workflows
+│   └── flows/
+│       └── alpine_hourly_flow.yaml
+├── grafana/                        # Provisioned Dashboards & Datasources
+├── src/
+│   ├── producer/                   # WebSocket Ingestion (CCXT, S3 Buffer, SQS)
+│   ├── speed_layer/                # AWS Lambda (EMA, Bollinger, Snowflake Direct Sink)
+│   ├── batch_layer/                # dbt project (Staging, Incremental Silver, Gold Views)
+│   └── serving_layer/              # Real-Time Streamlit Application
+└── tests/                          # Pytest suite (Moto S3 & SQS mocks)
+
+```
+
+---
+
+## 🚀 Getting Started & Execution Guide
+
+### Prerequisites & Cloud Authentication
+
+Before running Terraform, you must configure authentication for both AWS and Snowflake. To adhere to the principle of least privilege and ensure proper auditability, **dedicated technical service accounts** should be used rather than personal accounts.
+
+#### 1. AWS Authentication (Service Account / IAM Profile)
+
+Configure a dedicated IAM user (`alt-terraform-deployer`) with permissions restricted to S3, SQS, Lambda, IAM, and CloudWatch, or configure via an AWS CLI profile:
 
 ```bash
-# 1. Setup Environment
-cp .env.example .env  # Update with your credentials
+aws configure --profile alt-terraform
+# Or export environment variables for the deployment session:
+export AWS_ACCESS_KEY_ID="your_service_account_access_key"
+export AWS_SECRET_ACCESS_KEY="your_service_account_secret_key"
+export AWS_DEFAULT_REGION="eu-north-1"
 
-# 2. Provision Infrastructure
+```
+
+#### 2. Snowflake Provider Environment Variables (Service User)
+
+Create a dedicated technical user (e.g., `ALT_TERRAFORM_USER`) with sufficient administrative privileges (`ACCOUNTADMIN` or `SYSADMIN`/`SECURITYADMIN`) to bootstrap the database, warehouse, and RBAC roles:
+
+```sql
+CREATE USER alt_terraform_user 
+  PASSWORD='<secure_password>' 
+  DEFAULT_WAREHOUSE='ALT_WH' 
+  COMMENT='Service account for Terraform infrastructure deployment';
+GRANT ROLE ACCOUNTADMIN TO USER alt_terraform_user;
+
+```
+
+Then, configure your Terraform variables via `infra/terraform.tfvars`:
+
+```hcl
+snowflake_account  = "org-account_identifier"
+snowflake_user     = "alt_terraform_user"
+snowflake_password = "your_secure_password"
+snowflake_role     = "ACCOUNTADMIN"
+snowflake_warehouse = "ALT_WH"
+
+```
+
+---
+
+### Step-by-Step Execution
+
+### 1. Environment Initialization
+
+```bash
+# Copy and configure the application runtime environment file
+cp .env.example .env
+
+# Copy and configure Terraform variables for infrastructure deployment
+cp infra/terraform.tfvars.example infra/terraform.tfvars
+
+```
+
+### 2. Infrastructure Deployment (Terraform)
+
+```bash
 make init
 make apply
 
-# 3. Launch Pipeline
-make run-producer  # Start WebSocket feed
-make dbt-run       # Run transformations
-make run-dashboard # Launch Streamlit UI
 ```
 
------
+### 3. Launch Local Services & Pipeline
 
-## 📚 Research & References
+```bash
+# Start orchestration & monitoring services (Kestra & Grafana)
+docker-compose up -d
 
-To ensure industry-standard reliability, this project is grounded in the following technical foundations:
+# Start the WebSocket data producer
+make run-producer
 
-  * **[The Lambda Architecture](https://www.oreilly.com/library/view/big-data/9781617290343/) (Marz & Warren):** The core design pattern for balancing low-latency (Speed) with high-throughput (Batch).
-  * **[Statistical Monitoring of High-Frequency Data](https://www.google.com/search?q=https://www.researchgate.net/publication/228260655_Statistical_Methods_for_High-Frequency_Data_Analysis):** Theoretical basis for using Bollinger Bands and moving averages for anomaly detection.
-  * **[The Unified Logging Layer (Jay Kreps)](https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying):** Foundation for using decoupled, log-based messaging (SQS) to ensure system durability.
+# Run dbt transformations (Silver & Gold layers)
+make dbt-run
 
------
+# Launch the Streamlit Dashboard
+make run-dashboard
 
-*Developed by Michael GARCIA (Alpine Data) — Built for Scale, Cost-Efficiency, and Resilience.*
+```
+
+### 4. Unit Testing
+
+```bash
+pytest
+
+```
+
+---
+
+*Developed by Michael GARCIA (Alpine Data) — Engineered for Scale, FinOps Performance, and Resilience.*
 
