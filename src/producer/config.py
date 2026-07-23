@@ -8,7 +8,7 @@ class ProducerSettings(BaseSettings):
     aws_endpoint_url: str | None = None  # To point to LocalStack
     
     s3_bucket_name: str = "alt-raw-data"
-    kinesis_stream_name: str = "alt-ticker-stream"
+    sqs_queue_name: str = "alt-ticker-queue.fifo"
     
     exchange_id: str = "binance"
     slack_webhook_url: str | None = None
