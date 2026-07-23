@@ -1,6 +1,6 @@
 # Alpine Lambda Trade (ALT) 🏔️
 
-![Trading System Architecture](docs/Trading_System_Architecture.png)
+![Trading System Architecture](docs/Trading_System_Architecture.webp)
 
 **High-Throughput Lambda Architecture (Batch + Speed layers) with AWS & Snowflake.**
 
